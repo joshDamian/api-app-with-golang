@@ -18,15 +18,53 @@ import (
 var tpl = template.Must(template.ParseFiles("index.html"))
 
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	buf := &bytes.Buffer{}
-	err := tpl.Execute(buf, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+func indexHandler(newsapi *news.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+        u, err := url.Parse(r.URL.String())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+        
+        params := u.Query()
+            
+        page := params.Get("page")
+        if page == "" {
+        	page = "1"
+        }
+        
+        results, err := newsapi.FetchAllNews(page)
+        if err != nil {
+        	http.Error(w, err.Error(), http.StatusInternalServerError)
+        	return
+        }
+        
+        nextPage, err := strconv.Atoi(page)
+        if err != nil {
+        	http.Error(w, err.Error(), http.StatusInternalServerError)
+        	return
+        }
+        
+        search := &Search{
+        	Query:      "",
+        	NextPage:   nextPage,
+        	TotalPages: int(math.Ceil(float64(results.TotalResults) / float64(newsapi.PageSize))),
+        	Results:    results,
+        }
+        
+        if ok := !search.IsLastPage(); ok {
+        	search.NextPage++
+        }
+        
+        buf := &bytes.Buffer{}
+        err = tpl.Execute(buf, search)
+        if err != nil {
+        	http.Error(w, err.Error(), http.StatusInternalServerError)
+        	return
+        }
+        
+        buf.WriteTo(w)
 	}
-
-	buf.WriteTo(w)
 }
 
 
@@ -58,7 +96,7 @@ func (s *Search) PreviousPage() int {
 
 
 func searchHandler(newsapi *news.Client) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+return func(w http.ResponseWriter, r *http.Request) {
 		u, err := url.Parse(r.URL.String())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -72,7 +110,7 @@ func searchHandler(newsapi *news.Client) http.HandlerFunc {
 			page = "1"
 		}
 
-		results, err := newsapi.FetchEverything(searchQuery, page)
+		results, err := newsapi.FetchByQuery(searchQuery, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -130,7 +168,7 @@ func main() {
 	newsapi := news.NewClient(myClient, apiKey, 20)
 
     mux.Handle("/assets/", http.StripPrefix("/assets/", fs))
-    mux.HandleFunc("/", indexHandler)
+    mux.HandleFunc("/news", indexHandler(newsapi))
     mux.HandleFunc("/search", searchHandler(newsapi))
     http.ListenAndServe(":"+port, mux)
 }
