@@ -9,6 +9,8 @@ import (
     "time"
 )
 
+var IndexDomains string = "cnn.com,channelstv.com,punchng.com,techchrunch.com,thenextweb.com,bloomberg.com"
+
 type Client struct {
 	http     *http.Client
 	key      string
@@ -46,9 +48,14 @@ func NewClient(httpClient *http.Client, key string, pageSize int) *Client {
 }
 
 
-func (c *Client) FetchAllNews(page string) (*Results, error) {
-    endpoint := fmt.Sprintf("https://newsapi.org/v2/everything&pageSize=%d&page=%s&apiKey=%s&sortBy=publishedAt&language=en", c.PageSize, page, c.key)
+func (c *Client) FetchAllNews(page string, domains string) (*Results, error) {
+    if domains == "" {
+        domains = IndexDomains;
+    }
+    endpoint := fmt.Sprintf("https://newsapi.org/v2/everything?domains=%s&pageSize=%d&page=%s&apiKey=%s&sortBy=publishedAt&language=en", domains, c.PageSize, page, c.key)
     resp, err := c.http.Get(endpoint)
+   
+    
     if err != nil {
         return nil, err
     }
